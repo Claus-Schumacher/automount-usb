@@ -31,6 +31,12 @@ MOUNT_POINT=$(mount | grep ${DEVICE} | awk '{ print $3 }')
 
 DEV_LABEL=""
 
+# Calliope variables
+CALLIOPE_MAP="/usr/local/etc/calliope.map"
+CALLIOPE_SID="ID_SERIAL_SHORT"
+CALLIOPE_ID=""
+CALLIOPE_NAME=""
+
 do_mount()
 {
     if [[ -n ${MOUNT_POINT} ]]; then
@@ -43,9 +49,23 @@ do_mount()
 
     # Figure out a mount point to use
     LABEL=${ID_FS_LABEL}
-    if grep -q " /media/${LABEL} " /etc/mtab; then
-        # Already in use, make a unique one
-        LABEL+="-${DEVBASE}"
+    if [[ ${LABEL} == "MINI" && `/usr/bin/lsusb | grep "NXP ARM mbed"` ]]; then
+        # detected device most likely is a Calliope MINI.
+        ${log} "${DEVICE} most likely is a Calliope MINI."
+
+        CALLIOPE_ID=`udevadm info --name=${DEVICE} | grep ${CALLIOPE_SID} | awk -F= '{print $2}'`
+
+        while read LINE; do
+            if [[ "$LINE" =~ "${CALLIOPE_ID//[[:space:]]/}" ]]; then
+                LABEL=`echo ${LINE} | awk -F: '{print $2}'`
+            fi
+        done < ${CALLIOPE_MAP}
+
+    else
+        if grep -q " /media/${LABEL} " /etc/mtab; then
+            # Already in use, make a unique one
+            LABEL+="-${DEVBASE}"
+        fi
     fi
     DEV_LABEL="${LABEL}"
 
@@ -56,7 +76,7 @@ do_mount()
 
     MOUNT_POINT="/media/${DEV_LABEL}"
 
-    ${log} "Mount point: ${MOUNT_POINT}"
+    ${log} "Mounting ${DEVICE} at ${MOUNT_POINT}"
 
     mkdir -p ${MOUNT_POINT}
 
@@ -74,7 +94,7 @@ do_mount()
         exit 1
     else
         # Track the mounted drives
-        echo "${MOUNT_POINT}:${DEVBASE}" | cat >> "/var/log/usb-mount.track" 
+        echo "${MOUNT_POINT}:${DEVBASE}" | cat >> "/var/log/usb-mount.track"
     fi
 
     ${log} "Mounted ${DEVICE} at ${MOUNT_POINT}"
